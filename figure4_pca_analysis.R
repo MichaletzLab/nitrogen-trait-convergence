@@ -4,6 +4,9 @@
 ##' @author [Nathan D. Malamud]
 ##' @date [2025-01-27] 
 ##'
+##' Revised 8 March 2026 to add convergence analysis
+##' Sean Michaletz (sean.michaletz@ubc.ca)
+##'
 
 # Libraries ----
 library(tidyverse)
@@ -70,14 +73,23 @@ label_units <- c(
 )
 
 # PCA Analysis ----
-# Select relevant variables and scale data
-pca_data <- traits %>% select(species, treatment_mmol, LMA, LDMC, CHL, GRT)
-pca_data$treatment_mmol <- as.factor(pca_data$treatment_mmol)
+# Keep treatment_mmol numeric here. Convert to factor only inside plotting calls.
+# This keeps the PCA trait inputs unchanged while allowing numeric trend tests later.
 
-pca <- prcomp(pca_data %>% select(-c(species, treatment_mmol)), center = TRUE, scale. = TRUE)
+pca_data <- traits %>%
+  select(barcodeID, species, treatment_mmol, LMA, LDMC, CHL, GRT)
+
+pca_input <- pca_data %>%
+  select(LMA, LDMC, CHL, GRT)
+
+# Save the exact scaled trait matrix that enters the PCA so the 4-D sensitivity
+# analysis uses the same rows and standardization as the ordination.
+pca_input_scaled <- scale(pca_input, center = TRUE, scale = TRUE)
+
+pca <- prcomp(pca_input, center = TRUE, scale. = TRUE)
 
 # Calculate % variance explained by each PC
-explained_variation <- round(100 * pca$sdev^2 / sum(pca$sdev^2), 1) 
+explained_variation <- round(100 * pca$sdev^2 / sum(pca$sdev^2), 1)
 
 ## Ordination biplot, groups by species ----
 pca_plot_species <- fviz_pca_biplot(
@@ -233,7 +245,7 @@ ggsave(
 
 # Save as svg
 library(svglite)
-ggsave("treatment_pca_plot.svg", pca_plot_treatment,
+ggsave("./figures/treatment_pca_plot.svg", pca_plot_treatment,
        width = 16, height = 6, bg="white")
 
 # Save scree plot
@@ -243,3 +255,263 @@ ggsave(
   width = 5, height = 5,
   bg = "white"
 )
+
+
+# Convergence metrics for Fig. 4 ----
+# Analytical rationale:
+# 1. All convergence metrics are computed in PC1-PC2 space to match Fig. 4.
+# 2. All metrics are computed at the nitrogen-treatment level, pooled across species.
+# 3. All computations use individual PC scores from the PCA, not ellipse parameters.
+
+# Step 2. Extract individual PC scores with metadata.
+# This is built from the exact rows retained in the PCA so there is a one-to-one
+# correspondence between the plotted points and the convergence metrics.
+pc_scores <- pca_data %>%
+  select(barcodeID, species, treatment_mmol) %>%
+  bind_cols(as_tibble(pca$x[, c("PC1", "PC2"), drop = FALSE])) %>%
+  mutate(treatment_mmol = as.numeric(treatment_mmol))
+
+# Step 3-4. Compute treatment sample sizes, centroids, and mean distance to centroid.
+# mean_dist_to_centroid is analogous to functional dispersion (FDis), but is
+# computed in ordination space rather than the original trait space.
+treatment_summary <- pc_scores %>%
+  group_by(treatment_mmol) %>%
+  mutate(
+    centroid_pc1 = mean(PC1),
+    centroid_pc2 = mean(PC2),
+    dist_to_centroid = sqrt(
+      (PC1 - centroid_pc1)^2 +
+        (PC2 - centroid_pc2)^2
+    )
+  ) %>%
+  summarise(
+    sample_size = n(),
+    centroid_pc1 = first(centroid_pc1),
+    centroid_pc2 = first(centroid_pc2),
+    mean_dist_to_centroid = mean(dist_to_centroid),
+    .groups = "drop"
+  ) %>%
+  arrange(treatment_mmol)
+
+# Helper functions ----
+get_reference_centroid <- function(score_df, ref_levels) {
+  score_df %>%
+    filter(treatment_mmol %in% ref_levels) %>%
+    summarise(
+      ref_pc1 = mean(PC1),
+      ref_pc2 = mean(PC2)
+    )
+}
+
+add_centroid_distance <- function(summary_df, score_df, ref_levels) {
+  ref_centroid <- get_reference_centroid(score_df, ref_levels)
+  
+  summary_df %>%
+    mutate(
+      centroid_distance_to_convergence_region = if_else(
+        treatment_mmol %in% ref_levels,
+        NA_real_,
+        sqrt(
+          (centroid_pc1 - ref_centroid$ref_pc1)^2 +
+            (centroid_pc2 - ref_centroid$ref_pc2)^2
+        )
+      )
+    )
+}
+
+run_trend_tests <- function(df, response_var) {
+  x <- df$treatment_mmol
+  y <- df[[response_var]]
+  
+  spearman_fit <- suppressWarnings(
+    cor.test(x, y, method = "spearman", exact = FALSE)
+  )
+  
+  lm_formula <- as.formula(paste(response_var, "~ treatment_mmol"))
+  lm_fit <- lm(lm_formula, data = df)
+  lm_coef <- summary(lm_fit)$coefficients["treatment_mmol", ]
+  
+  tibble(
+    response = response_var,
+    spearman_rho = unname(spearman_fit$estimate),
+    spearman_p = spearman_fit$p.value,
+    lm_slope = unname(lm_coef[["Estimate"]]),
+    lm_r2 = unname(summary(lm_fit)$r.squared),
+    lm_p = unname(lm_coef[["Pr(>|t|)"]])
+  )
+}
+
+run_reference_sensitivity <- function(summary_df, score_df, ref_levels, label) {
+  add_centroid_distance(summary_df, score_df, ref_levels) %>%
+    filter(!is.na(centroid_distance_to_convergence_region)) %>%
+    run_trend_tests("centroid_distance_to_convergence_region") %>%
+    transmute(
+      analysis = label,
+      spearman_rho,
+      spearman_p
+    )
+}
+
+# Step 5-6. Define the pooled 30 + 35 mM reference centroid and compute
+# centroid distance for non-reference treatments.
+treatment_summary_main <- add_centroid_distance(
+  summary_df = treatment_summary,
+  score_df = pc_scores,
+  ref_levels = c(30, 35)
+)
+
+# Step 7. Test mean distance to centroid ~ nitrogen (n = 8 treatments).
+mean_dist_tests_pc <- treatment_summary_main %>%
+  run_trend_tests("mean_dist_to_centroid")
+
+# Step 8. Test centroid distance ~ nitrogen (n = 6 treatments; 30 and 35 mM excluded).
+centroid_dist_tests_main <- treatment_summary_main %>%
+  filter(!is.na(centroid_distance_to_convergence_region)) %>%
+  run_trend_tests("centroid_distance_to_convergence_region")
+
+# Step 9. Sensitivity analyses (diagnostic only).
+# These are robustness checks, not alternative analyses to report in the manuscript.
+
+# 9a. Alternative reference: 35 mM alone
+centroid_dist_tests_ref_35 <- run_reference_sensitivity(
+  summary_df = treatment_summary,
+  score_df = pc_scores,
+  ref_levels = c(35),
+  label = "centroid_distance_pc_ref_35"
+)
+
+# 9b. Alternative reference: pooled 25 + 30 + 35 mM
+centroid_dist_tests_ref_25_30_35 <- run_reference_sensitivity(
+  summary_df = treatment_summary,
+  score_df = pc_scores,
+  ref_levels = c(25, 30, 35),
+  label = "centroid_distance_pc_ref_25_30_35"
+)
+
+# 9c. Main reference for comparison table: pooled 30 + 35 mM
+centroid_dist_tests_ref_30_35 <- centroid_dist_tests_main %>%
+  transmute(
+    analysis = "centroid_distance_pc_ref_30_35",
+    spearman_rho,
+    spearman_p
+  )
+
+# 9d. Mean distance to centroid in the original 4-D standardized trait space.
+# This applies only to the within-treatment dispersion metric, not to the
+# directional centroid-distance metric.
+trait_scores_4d <- pca_data %>%
+  select(barcodeID, species, treatment_mmol) %>%
+  bind_cols(as_tibble(pca_input_scaled)) %>%
+  mutate(treatment_mmol = as.numeric(treatment_mmol))
+
+trait_summary_4d <- trait_scores_4d %>%
+  group_by(treatment_mmol) %>%
+  mutate(
+    centroid_LMA = mean(LMA),
+    centroid_LDMC = mean(LDMC),
+    centroid_CHL = mean(CHL),
+    centroid_GRT = mean(GRT),
+    dist_to_centroid_4d = sqrt(
+      (LMA - centroid_LMA)^2 +
+        (LDMC - centroid_LDMC)^2 +
+        (CHL - centroid_CHL)^2 +
+        (GRT - centroid_GRT)^2
+    )
+  ) %>%
+  summarise(
+    mean_dist_to_centroid_4d = mean(dist_to_centroid_4d),
+    .groups = "drop"
+  ) %>%
+  arrange(treatment_mmol)
+
+mean_dist_tests_4d <- trait_summary_4d %>%
+  run_trend_tests("mean_dist_to_centroid_4d")
+
+# Comparison table for sensitivity checks: Spearman rho and p-value only
+sensitivity_table <- bind_rows(
+  mean_dist_tests_pc %>%
+    transmute(
+      analysis = "mean_dist_to_centroid_pc",
+      spearman_rho,
+      spearman_p
+    ),
+  centroid_dist_tests_ref_30_35,
+  centroid_dist_tests_ref_35,
+  centroid_dist_tests_ref_25_30_35,
+  mean_dist_tests_4d %>%
+    transmute(
+      analysis = "mean_dist_to_centroid_4d",
+      spearman_rho,
+      spearman_p
+    )
+)
+
+# Step 10. Print summary table and main test results to console.
+cat("\nTreatment-level summary table:\n")
+print(treatment_summary_main, n = Inf)
+
+cat("\nMain trend tests: mean distance to centroid in PC1-PC2\n")
+print(mean_dist_tests_pc, n = Inf)
+
+cat("\nMain trend tests: centroid distance to pooled 30 + 35 mM reference\n")
+print(centroid_dist_tests_main, n = Inf)
+
+cat("\nSensitivity checks (Spearman only):\n")
+print(sensitivity_table, n = Inf)
+
+# Step 11. Diagnostic plot.
+plot_mean_dist <- ggplot(
+  treatment_summary_main,
+  aes(x = treatment_mmol, y = mean_dist_to_centroid)
+) +
+  geom_point(size = 2.5) +
+  geom_smooth(method = "lm", formula = y ~ x, color="black", se = FALSE) +
+  labs(
+    x = "Nitrogen addition (mM)",
+    y = "Mean distance to centroid"
+  ) +
+  custom_theme +
+  theme(aspect.ratio = 1)
+
+plot_centroid_dist <- ggplot(
+  treatment_summary_main %>%
+    filter(!is.na(centroid_distance_to_convergence_region)),
+  aes(x = treatment_mmol, y = centroid_distance_to_convergence_region)) +
+  geom_point(size = 2.5) +
+  geom_smooth(method = "lm", formula = y ~ x, color="black", se = FALSE) +
+  coord_cartesian(ylim = c(0, NA)) +
+  scale_x_continuous(expand = expansion(mult = c(0.03, 0.03))) +
+  scale_y_continuous(expand = expansion(mult = c(0.03, 0.03))) +
+  labs(
+    x = "Nitrogen addition (mM)",
+    y = "Centroid distance to convergence region (unitless)"
+  ) +
+  custom_theme +
+  theme(aspect.ratio = 1)
+
+convergence_diagnostic_plot <- ggarrange(
+  plot_mean_dist,
+  plot_centroid_dist,
+  nrow = 1,
+  labels = c("a", "b")
+)
+
+print(convergence_diagnostic_plot)
+
+# Save directional convergence plot as PNG
+ggsave(
+  filename = "./figures/convergence_diagnostic_plot.png",
+  plot = plot_centroid_dist,
+  width = 5, height = 5,
+  bg = "white"
+)
+
+# Save directional convergence plot as PNG
+library(svglite)
+ggsave(
+  filename = "./figures/convergence_diagnostic_plot.svg",
+  plot = plot_centroid_dist,
+  width = 8, height = 6,
+  bg = "white"
+)
+
