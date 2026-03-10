@@ -131,14 +131,14 @@ custom_colors1 <- c(
 
 # Highlight key treatments using custom colors for specific nitrogen levels
 custom_colors2 <- c(
-  "0"  = "#FDBE85",  # Darker beige
-  "5"  = "grey",  # Light brownish-orange
-  "10" = "grey",  # Soft orange
+  "0"  = "#D2B48C",  # Darker beige
+  "5"  = "grey",  
+  "10" = "grey", 
   "15" = "#FDAE61",  # Bright orange
-  "20" = "grey",  # Deep orange
-  "25" = "grey",  # Red
+  "20" = "grey",
+  "25" = "grey",
   "30" = "#BD0026",  # Dark red
-  "35" = "grey"   # Deep maroon
+  "35" = "grey" 
 )
 
 
@@ -162,7 +162,7 @@ pca_plot_treatment_ellipse <- fviz_pca_biplot(
     y = paste0("PC2 (", explained_variation[2], "% variance)")
   ) +
   custom_theme +
-  scale_color_manual(values = custom_colors2) +  # Assign custom colors
+  scale_color_manual(values = custom_colors1) +  # Assign custom colors
   scale_shape_manual(values = custom_shapes) +  # Assign distinct shapes
   theme(
     legend.position = "bottom",
