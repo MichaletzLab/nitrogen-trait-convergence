@@ -130,16 +130,16 @@ custom_colors1 <- c(
 )
 
 # Highlight key treatments using custom colors for specific nitrogen levels
-custom_colors2 <- c(
-  "0"  = "#D2B48C",  # Darker beige
-  "5"  = "grey",  
-  "10" = "grey", 
-  "15" = "#FDAE61",  # Bright orange
-  "20" = "grey",
-  "25" = "grey",
-  "30" = "#BD0026",  # Dark red
-  "35" = "grey" 
-)
+# custom_colors2 <- c(
+#   "0"  = "#D2B48C",  # Darker beige
+#   "5"  = "grey",  
+#   "10" = "grey", 
+#   "15" = "#FDAE61",  # Bright orange
+#   "20" = "grey",
+#   "25" = "grey",
+#   "30" = "#BD0026",  # Dark red
+#   "35" = "grey" 
+# )
 
 
 # Define distinct shapes (must match the number of nitrogen levels)
