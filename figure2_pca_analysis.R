@@ -4,7 +4,7 @@
 ##' @author [Nathan D. Malamud]
 ##' @date [2025-01-27] 
 ##'
-##' Revised 8 March 2026 to add convergence analysis
+##' Revised March 2026 to add convergence analysis
 ##' Sean Michaletz (sean.michaletz@ubc.ca)
 ##'
 
@@ -459,7 +459,7 @@ print(centroid_dist_tests_main, n = Inf)
 cat("\nSensitivity checks (Spearman only):\n")
 print(sensitivity_table, n = Inf)
 
-# Step 11. Diagnostic plot.
+# Step 11. Plots.
 plot_mean_dist <- ggplot(
   treatment_summary_main,
   aes(x = treatment_mmol, y = mean_dist_to_centroid)
@@ -489,18 +489,18 @@ plot_centroid_dist <- ggplot(
   custom_theme +
   theme(aspect.ratio = 1)
 
-convergence_diagnostic_plot <- ggarrange(
+convergence_plot <- ggarrange(
   plot_mean_dist,
   plot_centroid_dist,
   nrow = 1,
   labels = c("a", "b")
 )
 
-print(convergence_diagnostic_plot)
+print(convergence_plot)
 
 # Save directional convergence plot as PNG
 ggsave(
-  filename = "./figures/convergence_diagnostic_plot.png",
+  filename = "./figures/convergence_plot.png",
   plot = plot_centroid_dist,
   width = 5, height = 5,
   bg = "white"
@@ -509,9 +509,41 @@ ggsave(
 # Save directional convergence plot as PNG
 library(svglite)
 ggsave(
-  filename = "./figures/convergence_diagnostic_plot.svg",
+  filename = "./figures/convergence_plot.svg",
   plot = plot_centroid_dist,
   width = 8, height = 6,
   bg = "white"
 )
 
+# Plot Figure 2 ----
+# PCA on left, directional convergence on right
+
+figure2 <- ggarrange(
+  pca_plot_treatment_ellipse,
+  plot_centroid_dist,
+  nrow = 1,
+  labels = c("a", "b"),
+  widths = c(1.2, 1),
+  align = "hv"
+)
+
+print(figure2)
+
+# Save combined figure as PNG
+ggsave(
+  filename = "./figures/Fig_2.png",
+  plot = figure2,
+  width = 10,
+  height = 5,
+  bg = "white"
+)
+
+# Save combined figure as SVG
+library(svglite)
+ggsave(
+  filename = "./figures/Fig_2.svg",
+  plot = figure2,
+  width = 16,
+  height = 6,
+  bg = "white"
+)
