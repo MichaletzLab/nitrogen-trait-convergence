@@ -518,9 +518,49 @@ ggsave(
 # Plot Figure 2 ----
 # PCA on left, directional convergence on right
 
+plot_centroid_dist_pretty <- ggplot(
+  treatment_summary_main %>%
+    filter(!is.na(centroid_distance_to_convergence_region)),
+  aes(
+    x = treatment_mmol,
+    y = centroid_distance_to_convergence_region,
+    color = factor(treatment_mmol),
+    shape = factor(treatment_mmol)
+  )
+) +
+  geom_point(size = 2.8) +
+  geom_smooth(
+    data = treatment_summary_main %>%
+      filter(!is.na(centroid_distance_to_convergence_region)),
+    aes(
+      x = treatment_mmol,
+      y = centroid_distance_to_convergence_region
+    ),
+    method = "lm",
+    formula = y ~ x,
+    color = "black",
+    se = FALSE,
+    inherit.aes = FALSE
+  ) +
+  coord_cartesian(ylim = c(0, NA)) +
+  scale_x_continuous(expand = expansion(mult = c(0.03, 0.03))) +
+  scale_y_continuous(expand = expansion(mult = c(0.03, 0.03))) +
+  scale_color_manual(values = custom_colors1) +
+  scale_shape_manual(values = custom_shapes) +
+  labs(
+    x = "Nitrogen addition (mM)",
+    y = "Centroid distance to convergence region (unitless)"
+  ) +
+  custom_theme +
+  theme(
+    aspect.ratio = 1,
+    legend.position = "none"
+  )
+
+
 figure2 <- ggarrange(
   pca_plot_treatment_ellipse,
-  plot_centroid_dist,
+  plot_centroid_dist_pretty,
   nrow = 1,
   labels = c("a", "b"),
   widths = c(1.2, 1),
