@@ -352,19 +352,19 @@ run_reference_sensitivity <- function(summary_df, score_df, ref_levels, label) {
     )
 }
 
-# Step 5-6. Define the pooled 30 + 35 mM reference centroid and compute
+# Step 5-6. Define the pooled 35 mM reference centroid and compute
 # centroid distance for non-reference treatments.
 treatment_summary_main <- add_centroid_distance(
   summary_df = treatment_summary,
   score_df = pc_scores,
-  ref_levels = c(30, 35)
+  ref_levels = c(35)
 )
 
 # Step 7. Test mean distance to centroid ~ nitrogen (n = 8 treatments).
 mean_dist_tests_pc <- treatment_summary_main %>%
   run_trend_tests("mean_dist_to_centroid")
 
-# Step 8. Test centroid distance ~ nitrogen (n = 6 treatments; 30 and 35 mM excluded).
+# Step 8. Test centroid distance ~ nitrogen (n = 7 treatments; 35 mM excluded).
 centroid_dist_tests_main <- treatment_summary_main %>%
   filter(!is.na(centroid_distance_to_convergence_region)) %>%
   run_trend_tests("centroid_distance_to_convergence_region")
@@ -372,7 +372,7 @@ centroid_dist_tests_main <- treatment_summary_main %>%
 # Step 9. Sensitivity analyses (diagnostic only).
 # These are robustness checks, not alternative analyses to report in the manuscript.
 
-# 9a. Alternative reference: 35 mM alone
+# 9a. Main reference for comparison table: 35 mM alone
 centroid_dist_tests_ref_35 <- run_reference_sensitivity(
   summary_df = treatment_summary,
   score_df = pc_scores,
@@ -388,7 +388,7 @@ centroid_dist_tests_ref_25_30_35 <- run_reference_sensitivity(
   label = "centroid_distance_pc_ref_25_30_35"
 )
 
-# 9c. Main reference for comparison table: pooled 30 + 35 mM
+# 9c. Alternative reference: pooled 30 + 35 mM
 centroid_dist_tests_ref_30_35 <- centroid_dist_tests_main %>%
   transmute(
     analysis = "centroid_distance_pc_ref_30_35",
@@ -453,7 +453,7 @@ print(treatment_summary_main, n = Inf)
 cat("\nMain trend tests: mean distance to centroid in PC1-PC2\n")
 print(mean_dist_tests_pc, n = Inf)
 
-cat("\nMain trend tests: centroid distance to pooled 30 + 35 mM reference\n")
+cat("\nMain trend tests: centroid distance to 35 mM reference\n")
 print(centroid_dist_tests_main, n = Inf)
 
 cat("\nSensitivity checks (Spearman only):\n")
