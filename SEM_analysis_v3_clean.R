@@ -1,41 +1,14 @@
-# SEM analysis using non-imputed data
-# Sean Michaletz (sean.michaletz@gmail.com), 2 Feb 2025
-# Updated 20 Feb 2025
+# SEM analysis for Malamud et al. Nitrogen trait convergence study
+# Sean Michaletz (sean.michaletz@ubc.ca), 2 Feb 2025
+# Updated 20 Feb 2025, 18 March 2026
 
 # 0. Initialize ----
 
-#setwd("E:/Documents/UBC/Students postdocs/Malamud Nate/MSc/manuscript/")
-
 # Load data
-#df <- read.csv("traits.csv",header=T) # Data from Nate
-#df <- read.csv("traits_imputed.csv",header=T) # traits_complete.csv from Nate, with imputed data for missing observations
 df <- read.csv("./data/traits.csv",header=T)
 
 # Calculate aboveground growth rate
 df$grt_g_d <- df$dry_whole_g / 6*7 #days in experiment
-
-# Here, we use untransformed nitrogen, log(traits), and log(growth rate). This
-# is based entirely on theory and precedent in the literature. For example, 
-# log(traits) ~ nitrogen was used in Halbritter et al. in review and many others,
-# log(trait) ~ log(trait) is based on leaf economics spectrum theory, and
-# log(growth rate) ~ log(traits) is based on allometry and metabolic theory. 
-# Model selection is used to identify AIC preference for random effects by 
-# species.
-
-# This approach doesn't always provide the best description of the relationships
-# (particularly for saturation of CHL and growth rates across nitrogen), but:
-# 1) It enables retention of the 0 mmol treatment, which needs to be removed for
-#    most other transformations such as 1/y ~ 1/x;
-# 2) It yields a simple, parsimonious SEM that is consistent with existing trait-
-#    based scaling theory;
-# 3) It still captures the general, zeroth-order relationships;
-# 3) We must remember that the goal of SEM is to evaluate hypothesized causal 
-#    relationships, not to predict y from x. Thus, SEMs use linear models that 
-#    provide effect size and significance even though they may not be the best 
-#    description of the data (in terms of model form).
-
-# If we ultimately use this approach, the above text should be included in the 
-# Methods section.
 
 
 # 1. Summarize data ----
@@ -55,6 +28,7 @@ print(df_summary2)
 
 
 # 2. Trait-nitrogen relationships ----
+
 ### Model selection ----
 # Compete models for log(trait) ~ treatment_mmol using:
 # - Fixed effects only (lm)
@@ -173,7 +147,6 @@ results_df <- subset(results_df, is.na(singular) | singular == FALSE)
 
 # Print results
 print(results_df)
-
 # AIC prefers only fixed effect for LMA and CHL, and random intercept for LDMC.
 
 
@@ -185,7 +158,7 @@ print(results_df)
 library(ggplot2)
 library(lme4)
 library(dplyr)
-library(rlang)  # for tidy evaluation with sym()
+library(rlang)
 
 # Define a function to plot a given trait against treatment_mmol
 plot_trait <- function(trait) {
@@ -207,7 +180,7 @@ plot_trait <- function(trait) {
     p <- ggplot(df, aes(x = treatment_mmol, y = !!sym(trait), color = species)) +
       geom_point() +
       geom_line(data = pred_data, aes(x = treatment_mmol, y = 10^(predicted_log_trait)), 
-                color = "black", linewidth = 1) +  # Updated from `size` to `linewidth`
+                color = "black", linewidth = 1) + 
       scale_y_log10() +
       labs(x = "Nitrogen treatment (mmol)",
            y = trait,
@@ -233,7 +206,7 @@ plot_trait <- function(trait) {
     p <- ggplot(df, aes(x = treatment_mmol, y = !!sym(trait), color = species)) +
       geom_point() +
       geom_line(data = pred_data, aes(x = treatment_mmol, y = 10^(predicted_log_trait), color = species), 
-                linewidth = 1) +  # Updated from `size` to `linewidth`
+                linewidth = 1) +  
       scale_y_log10() +
       labs(x = "Nitrogen treatment (mmol)",
            y = trait,
@@ -258,21 +231,14 @@ print(p_LDMC)
 print(p_CHL)
 
 
-# Chlorophyll appears to saturate across the nitrogen gradient,
-# which the transformation and models don't capture well. However, the models do
-# capture the general increase in chlorophyll with nitrogen, 
-# so in that sense they are performing adequately. We should remember the goal 
-# here isn't to predict y from x, but rather to test hypothesized causal 
-# relationships, so these models can adequately do that.
-
-
 # 3. Growth-Nitrogen Relationships ----
+
 ### Model Selection ----
 library(lme4)        # For lmer and singular fit checking
 library(MuMIn)       # For r.squaredGLMM()
 library(performance) # For alternative R^2 calculation
 
-# Define candidate models, now including a fixed-effects model
+# Define candidate models: fixed effects, random intercept, random slope, and random intercept+slope
 models <- list(
   FE = function(reml) {
     lm(log10(grt_g_d) ~ treatment_mmol, data = df)  # Fixed effects only
@@ -406,7 +372,7 @@ results_df <- subset(results_df, is.na(Singular_Fit) | Singular_Fit == FALSE)
 
 # Print the summary data frame
 print(results_df)
-# AIC prefers random intercept
+# AIC prefers random intercept by species
 
 
 ### Plot ----
@@ -445,12 +411,10 @@ p_grt <- ggplot(df, aes(x = treatment_mmol, y = log_grt, color = species)) +
   theme_bw()
 
 print(p_grt)
-# As for chlorophyll, we're not really capturing the saturation in growth rates
-# across nitrogen. However, we are capturing a general increase in growth rates
-# with nitrogen.
 
 
 # 4. Trait-trait relationships ----
+
 ### SMA regressions ----
 library(smatr)
 sma1 <- sma(LDMC ~ LMA * species, data = df, log = "xy")
@@ -463,10 +427,9 @@ summary(sma3) # B. officinalis and H. vulgare not significant (R. sativus is mar
 ### Plots ----
 # Make plots, including regression lines only when significant
 library(ggplot2)
-library(ggpmisc)   # Provides stat_ma_line()
+library(ggpmisc) # For stat_ma_line()
 library(dplyr)
 library(gridExtra)
-library(scales)    # For hue_pal()
 
 # A function that creates a pairwise plot with points and, conditionally, SMA regression lines by species.
 plot_pair <- function(xvar, yvar) {
@@ -511,6 +474,7 @@ gridExtra::grid.arrange(p1, p2, p3, ncol = 2)
 
 
 # 5. Growth-trait relationships ----
+
 ### SMA regressions ----
 library(smatr)
 sma4 <- sma(grt_g_d ~ LMA * species, data = df, log = "xy")
@@ -527,13 +491,12 @@ library(ggplot2)
 library(ggpmisc)   # Provides stat_ma_line() for Model II SMA lines
 library(dplyr)
 library(gridExtra)
-library(scales)    # For hue_pal()
 
 # A function to create a plot for growth rate vs. a given trait.
 # Both axes are log-scaled (without transforming the underlying data).
 # A separate SMA regression line is fit for each species,
-# but for grt_g_d ~ LMA and grt_g_d ~ LDMC, lines are omitted for 
-# B. officinalis but now included for H. vulgare in LMA.
+# but for grt_g_d ~ LMA, the line is omitted for B. officinalis only;
+# for grt_g_d ~ LDMC, lines are omitted for both B. officinalis and H. vulgare.
 plot_growth_vs_trait <- function(trait) {
   p <- ggplot(df, aes_string(x = trait, y = "grt_g_d", color = "species")) +
     geom_point() +
@@ -548,7 +511,7 @@ plot_growth_vs_trait <- function(trait) {
   # For other traits (e.g., CHL), add regression lines for all species.
   if (trait == "LMA") {
     p <- p + stat_ma_line(
-      data = subset(df, species != "B. officinalis"),  # Now includes H. vulgare
+      data = subset(df, species != "B. officinalis"),  # H. vulgare significant, B. officinalis not
       mapping = aes_string(x = trait, y = "grt_g_d", group = "species"),
       method = "SMA",
       se = FALSE,
@@ -573,7 +536,7 @@ plot_growth_vs_trait <- function(trait) {
 }
 
 # Create the three plots:
-p_LMA  <- plot_growth_vs_trait("LMA")   # grt_g_d vs. LMA: regression lines omitted for B. officinalis but included for H. vulgare
+p_LMA  <- plot_growth_vs_trait("LMA")   
 p_LDMC <- plot_growth_vs_trait("LDMC")  # grt_g_d vs. LDMC: regression lines omitted for B. officinalis and H. vulgare
 p_CHL  <- plot_growth_vs_trait("CHL")   # grt_g_d vs. CHL: regression lines for all species
 
@@ -582,6 +545,7 @@ gridExtra::grid.arrange(p_LMA, p_LDMC, p_CHL, ncol = 2)
 
 
 ### Model selection ----
+
 #### Simple Bivariate Models ----
 
 # Load required packages
@@ -703,7 +667,7 @@ print(results_df)
 
 # AIC prefers random slope for LMA, random slope (or secondarily intercept) for 
 # LDMC, and random intercept for CHL.
-# Use random intercepts for LMA and CHL, and random slope for LDMC.
+
 
 #### Multivariate Models ----
 
@@ -712,7 +676,7 @@ library(lmerTest)   # For lmer() with p-values
 library(MuMIn)      # For r.squaredGLMM()
 library(dplyr)
 
-# Define the four model options, now including fixed effects only
+# Define the four model options: fixed effects, random intercept, random slope, and random intercept+slope
 re_options <- c("fixed", "intercept", "slope", "intercept+slope")
 
 # Create a dataframe with all combinations for LMA, LDMC, CHL.
@@ -872,13 +836,12 @@ results_df <- subset(results_df, is.na(singular) | singular == FALSE)
 
 # Print the results
 print(results_df)
-# Here, AIC equally prefers:
+# AIC equally prefers:
 # 1) slope for LMA, intercept for LDMC and CHL
 # 2) intercept for LMA, slope for LDMC and CHL
 # 3) intercept+slope for LMA, intercept for LDMC and CHL
 # To be most consistent with AIC results for simple bivariate, use slope for LMA
 # and intercept for LDMC and CHL
-
 
 
 # 6. SEM analysis ----
@@ -887,14 +850,16 @@ library(lme4)
 library(piecewiseSEM)
 
 ### SEM v0 (starting model) ----
+# All hypothesized paths and correlations from the MPF framework (Fig. 1b).
 # For direct paths from nitrogen to traits, LMA and CHL use fixed effects only,
 # while LDMC uses random intercepts by species
 m0.1 <- lm(log10(LMA)  ~ treatment_mmol, data = df)
 m0.2 <- lmer(log10(LDMC)  ~ treatment_mmol + (1 | species), data = df)
 m0.3 <- lm(log10(CHL) ~ treatment_mmol, data = df)
 
-# Specify a linear model with random intercepts by species for LDMC, CHL, and
-# treatment_mmol, and random slope for LMA.
+# Growth rate model with a random intercept by species (the structure preferred
+# by AIC for LDMC and CHL in bivariate selection) and a random slope for LMA
+# by species (preferred by AIC for LMA in bivariate selection).
 m0.4 <- lmer(
   log10(grt_g_d) ~ log10(LMA) + log10(LDMC) + log10(CHL) + treatment_mmol +
     (1 | species) +             # Random intercept for species
@@ -909,22 +874,18 @@ sem0 <- psem(
   m0.2,
   m0.3,
   m0.4,
-  log10(LMA) %~~% log10(LDMC), # Note that these are correlations that should have double-headed arrow in path diagram
+  log10(LMA) %~~% log10(LDMC),
   log10(LMA) %~~% log10(CHL),
   log10(LDMC) %~~% log10(CHL)
 )
 
 # View summary
 summary(sem0)
-# Conclusions:
-# 1)  Chi-squared = 0, p = 1 indicates the model is saturated, so there are no additional 
-#     independence claims to test and no mismatch to measure
-# 2) AIC = -532.964
-# 3) There are 3 non-significant paths, which could be removed in stepwise fashion
+# chi-squared = 0, p = 1: model is saturated (no independence claims to test).
+# AIC = -532.964. There are 3 non-significant paths.
 
 
 ### SEM v1 ----
-
 # Remove most non-significant relationship: log10(LMA) ~~ log10(CHL)
 
 # Combine models into a piecewise SEM
@@ -933,21 +894,17 @@ sem1 <- psem(
   m0.2,
   m0.3,
   m0.4,
-  log10(LMA) %~~% log10(LDMC), # Note that these are correlations that should have double-headed arrow in path diagram
+  log10(LMA) %~~% log10(LDMC),
   log10(LDMC) %~~% log10(CHL)
 )
 
 # View summary
 summary(sem1)
-# Conclusions:
-# 1) Global goodness-of-fit is excellent (chi-squared = 0.004, p = 0.952)
-# 2) AIC = -532.964 (same as sem0)
-# 3) There are 2 non-significant paths, which could be removed in stepwise fashion
+# chi-squared = 0.004, p = 0.952. AIC = -532.964. Two non-significant paths remain.
 
 
-### SEM v2 ----
-
-# Remove most non-significant relationship: log10(LDMC) ~ log10(CHL)
+### SEM v2 (final model) ----
+# Remove most non-significant relationship: LDMC ~~ CHL.
 
 # Combine models into a piecewise SEM
 sem2 <- psem(
@@ -960,16 +917,13 @@ sem2 <- psem(
 
 # View summary
 summary(sem2)
-# Conclusions:
-# 1) Global fit is strong (chi-Squared = 2.818 (P = 0.244), Fisher's C = 4.217
-# (P = 0.377)
-# 2) AIC = -532.964 (same as sem1)
-# 3) There is one non-significant paths, which could be removed in stepwise fashion
+# chi-squared = 2.818, p = 0.244. AIC = -532.964.
+# One non-significant path remains (LMA -> growth rate); evaluated below.
 
 
-### SEM v3 ----
-
+### SEM v3 (test of LMA -> growth rate path) ----
 # Remove most non-significant relationship: log10(grt_g_d) ~ log10(LMA)
+# This model tests whether that path should be retained via d-separation.
 
 m3.4 <- lmer(
   log10(grt_g_d) ~ log10(LDMC) + log10(CHL) + treatment_mmol +
@@ -988,38 +942,15 @@ sem3 <- psem(
 
 # View summary
 summary(sem3)
-# Conclusions:
-# 1) Model fit is marginal (Chi-Squared = 9.95, p = 0.019; Fisher's C = 13.428, p = 0.037)
-# 2) AIC = -517.393, which is higher than sem2
-# 3) D-separation test indicates missing path from log10(grt_g_d) ~ log10(LMA)
+# chi-squared = 9.95, p = 0.019. AIC = -517.393 (DAIC = +15.57 vs. sem2).
+# D-separation test indicates missing path from LMA -> growth rate (p = 0.01).
+# LMA -> growth rate is therefore retained; sem2 is the final model.
 
 
-### SEM v4 ----
+# 7. Multivariate normality test (Fig. S2) ----
 
-# Adding back missing path from log10(grt_g_d) ~ log10(LMA) brings us back to sem2
-
-# Combine models into a piecewise SEM
-sem2 <- psem(
-  m0.1,
-  m0.2,
-  m0.3,
-  m0.4,
-  log10(LMA) %~~% log10(LDMC)
-)
-
-# View summary
-summary(sem2)
-# Conclusions:
-# 1) Global fit is strong (chi-Squared = 2.818 (P = 0.244), Fisher's C = 4.217
-# (P = 0.377)
-# 2) AIC = -532.964 (same as sem1)
-# 3) There is one non-significant paths, which could be removed in stepwise fashion
-
-
-# Q-Q plot (data not log-transformed)
+# Chi-square Q-Q plot and Henze-Zirkler test on log-transformed SEM variables.
 df2 <- df[, c("treatment_mmol", "dry_whole_g", "LMA", "LDMC", "CHL")]
-#library(MVN)
-#mvn(df2, mvnTest = "hz", multivariatePlot = "qq")
 
 # Q-Q plot (data log-transformed)
 df3 <- df2
