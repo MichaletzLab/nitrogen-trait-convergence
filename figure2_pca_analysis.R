@@ -462,7 +462,54 @@ print(centroid_dist_tests_main, n = Inf)
 cat("\nSensitivity checks (Spearman only):\n")
 print(sensitivity_table, n = Inf)
 
-# Step 11. Plots.
+# Step 11. PERMANOVA on PC1-PC2 scores across treatments.
+library(vegan)
+
+pc_matrix <- as.matrix(pc_scores[, c("PC1", "PC2")])
+treatment_factor <- factor(pc_scores$treatment_mmol)
+
+set.seed(42)
+permanova_overall <- adonis2(
+  pc_matrix ~ treatment_factor,
+  method = "euclidean",
+  permutations = 999
+)
+
+cat("\nOverall PERMANOVA (PC1 + PC2 ~ treatment):\n")
+print(permanova_overall)
+
+# Pairwise PERMANOVA with Bonferroni correction
+treatment_levels <- sort(unique(pc_scores$treatment_mmol))
+pairs <- combn(treatment_levels, 2, simplify = FALSE)
+
+pairwise_permanova <- map_dfr(pairs, function(pair) {
+  sub_df <- pc_scores %>% filter(treatment_mmol %in% pair)
+  sub_matrix <- as.matrix(sub_df[, c("PC1", "PC2")])
+  sub_treatment <- factor(sub_df$treatment_mmol)
+  
+  set.seed(42)
+  fit <- adonis2(
+    sub_matrix ~ sub_treatment,
+    method = "euclidean",
+    permutations = 999
+  )
+  
+  tibble(
+    group1 = pair[1],
+    group2 = pair[2],
+    F_value = round(fit$F[1], 3),
+    R2    = round(fit$R2[1], 3),
+    p_value = fit$`Pr(>F)`[1]
+  )
+})
+
+pairwise_permanova <- pairwise_permanova %>%
+  mutate(p_adj_bonferroni = p.adjust(p_value, method = "bonferroni"))
+
+cat("\nPairwise PERMANOVA (Bonferroni-corrected):\n")
+print(pairwise_permanova, n = Inf)
+
+# Step 12. Plots.
 plot_mean_dist <- ggplot(
   treatment_summary_main,
   aes(x = treatment_mmol, y = mean_dist_to_centroid)
