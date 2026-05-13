@@ -450,6 +450,9 @@ sensitivity_table <- bind_rows(
 cat("\nTreatment-level summary table:\n")
 print(treatment_summary_main, n = Inf)
 
+cat("\nVariance explained by PC1 and PC2:\n")
+print(explained_variation[1:2])
+
 cat("\nMain trend tests: mean distance to centroid in PC1-PC2\n")
 print(mean_dist_tests_pc, n = Inf)
 
